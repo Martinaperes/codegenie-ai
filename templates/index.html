@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeGenie AI Assistant</title>
+    <!-- Link to our custom CSS file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Load a modern font (Inter) from Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <header>
+            <h1>✨ CodeGenie AI</h1>
+            <p>Your Intelligent Code Assistant. Generate, Explain, or Debug code instantly.</p>
+        </header>
+
+        <!-- Main Content Section -->
+        <main>
+            <!-- Input Area -->
+            <div class="input-section">
+                <label for="user-input">What do you need help with?</label>
+                <textarea id="user-input" placeholder="Type your prompt or paste your code here..."></textarea>
+                
+                <!-- Action Buttons corresponding to the 3 main features -->
+                <div class="button-group">
+                    <button id="btn-generate" class="action-btn primary" onclick="handleAction('generate')" title="Write new code">
+                        <span class="icon">🚀</span> Generate Code
+                    </button>
+                    <button id="btn-explain" class="action-btn secondary" onclick="handleAction('explain')" title="Understand existing code">
+                        <span class="icon">📖</span> Explain Code
+                    </button>
+                    <button id="btn-debug" class="action-btn danger" onclick="handleAction('debug')" title="Fix errors in your code">
+                        <span class="icon">🐛</span> Debug Code
+                    </button>
+                </div>
+            </div>
+
+            <!-- Output Area -->
+            <div class="output-section">
+                <div class="output-header">
+                    <h2>Response</h2>
+                    <!-- Clipboard copy button -->
+                    <button id="btn-copy" class="icon-btn" onclick="copyToClipboard()" title="Copy to clipboard">
+                        📋 Copy
+                    </button>
+                </div>
+                
+                <div class="output-container">
+                    <!-- Loading Spinner (Hidden by default, shown during API calls) -->
+                    <div id="loading" class="hidden">
+                        <div class="spinner"></div>
+                        <p>CodeGenie is thinking...</p>
+                    </div>
+                    
+                    <!-- Text Output container where AI response will be injected -->
+                    <div id="ai-response" class="content-box">
+                        <span class="placeholder-text">Your AI generated response will appear here.</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Link to our custom JavaScript file -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
