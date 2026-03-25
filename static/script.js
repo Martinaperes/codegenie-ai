@@ -1,96 +1,174 @@
 /**
- * Main function to handle actions (generate, explain, debug) triggered by buttons.
- * @param {string} actionType - The type of action requested by the user.
+ * CodeGenie AI - Core Frontend Controller
+ * - Markdown Rendering (Marked.js Integration)
+ * - Syntax Highlighting (Prism.js Integration)
+ * - Modern Async Error Handling
+ */
+
+// Configure Marked options for better Markdown rendering
+if (typeof marked !== 'undefined') {
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false,
+        highlight: function(code, lang) {
+            // Optional: You can do extra pre-processing here if needed
+            return code;
+        }
+    });
+}
+
+/**
+ * Main function to handle actions (generate, explain, debug)
+ * @param {string} actionType - The type of action requested
  */
 async function handleAction(actionType) {
     const inputElement = document.getElementById('user-input');
     const responseElement = document.getElementById('ai-response');
     const loadingElement = document.getElementById('loading');
     
-    // Get the user's input text
+    // 1. Get and Validate Input
     const prompt = inputElement.value.trim();
-
-    // Basic Validation: Don't send empty requests to the server
     if (!prompt) {
-        alert("Please enter some text or code first.");
+        inputElement.animate([{ transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }], { duration: 100, iterations: 2 });
         inputElement.focus();
         return;
     }
 
-    // Prepare the UI for loading state
-    responseElement.classList.add('hidden'); // Hide any previous response
-    loadingElement.classList.remove('hidden'); // Show the loading spinner
+    // 2. Prepare Loading State
+    responseElement.innerHTML = ""; // Clear old output
+    responseElement.classList.add('hidden');
+    loadingElement.classList.remove('hidden');
 
     try {
-        // Send an AJAX POST request to our Flask backend using fetch API
+        // 3. API Dispatch to Flask
         const response = await fetch('/ask', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            // Serialize prompt and type into JSON format
-            body: JSON.stringify({
-                prompt: prompt,
-                type: actionType
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: prompt, type: actionType })
         });
 
-        // Parse the JSON response returned from the server
         const data = await response.json();
 
-        // Hide spinner once we get a response
+        // 4. Teardown Loading State
         loadingElement.classList.add('hidden');
         responseElement.classList.remove('hidden');
 
-        // Check if the server returned an error (e.g., status 400 or 500)
+        // 5. Handle Response
         if (!response.ok) {
-            responseElement.innerHTML = `<span class="error-text">❌ Error: ${data.error}</span>`;
+            showError(`⚠️ Server Error: ${data.error || 'Unknown issue'}`);
             return;
         }
 
-        // Display the successful AI response
-        // Using textContent instead of innerHTML prevents XSS (Cross-Site Scripting) attacks
-        // It correctly displays raw code without rendering it as HTML tags
-        responseElement.textContent = data.response;
+        // 6. Render as Markdown and Highlight
+        renderResponse(data.response);
 
     } catch (error) {
-        // Catch network errors (e.g., server offline, CORS issues)
-        console.error("Fetch error:", error);
+        console.error("Fetch Exception:", error);
         loadingElement.classList.add('hidden');
         responseElement.classList.remove('hidden');
-        responseElement.innerHTML = `<span class="error-text">❌ Network error. Make sure the Flask server is running.</span>`;
+        showError("❌ CONNECTION FAILED: The CodeGenie uplink is offline. Please ensure your Python server is running.");
     }
 }
 
 /**
- * Function to copy the generated AI response to the user's clipboard.
+ * Renders the raw text response into formatted HTML via Markdown
+ * @param {string} content - Raw AI text response
+ */
+function renderResponse(content) {
+    const responseElement = document.getElementById('ai-response');
+    
+    // Parse Markdown to HTML
+    if (typeof marked !== 'undefined') {
+        const renderedHtml = marked.parse(content);
+        responseElement.innerHTML = renderedHtml;
+        
+        // Wrap every <pre> block and add a copy button
+        injectCodeCopyButtons();
+
+        // Trigger Prism syntax highlighting
+        if (typeof Prism !== 'undefined') {
+            Prism.highlightAll();
+        }
+    } else {
+        responseElement.textContent = content;
+    }
+}
+
+/**
+ * Finds all <pre> tags and adds a floating copy button
+ */
+function injectCodeCopyButtons() {
+    const responseElement = document.getElementById('ai-response');
+    const preBlocks = responseElement.querySelectorAll('pre');
+
+    preBlocks.forEach((pre) => {
+        // Create wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pre-container';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        // Create button
+        const btn = document.createElement('button');
+        btn.innerHTML = '📋 Copy';
+        btn.className = 'copy-code-btn';
+        
+        btn.onclick = () => {
+            const code = pre.querySelector('code');
+            const textToCopy = code ? code.innerText : pre.innerText;
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                btn.innerHTML = '✅ Copied!';
+                btn.classList.add('success');
+                setTimeout(() => {
+                    btn.innerHTML = '📋 Copy';
+                    btn.classList.remove('success');
+                }, 2000);
+            });
+        };
+
+        wrapper.appendChild(btn);
+    });
+}
+
+/**
+ * Display error messages in a consistent format
+ * @param {string} msg - Error message string
+ */
+function showError(msg) {
+    const responseElement = document.getElementById('ai-response');
+    responseElement.innerHTML = `<div class="error-box">${msg}</div>`;
+}
+
+/**
+ * Copies the *rendered* response text to the user's clipboard
  */
 function copyToClipboard() {
     const responseElement = document.getElementById('ai-response');
-    const textToCopy = responseElement.textContent;
+    const bntCopy = document.getElementById('btn-copy');
+
+    // Extract text content from the rendered response container
+    const textToCopy = responseElement.textContent || responseElement.innerText;
     
-    // Validate that there's actual generated text to copy
-    // We don't want to copy the placeholder or error messages
-    if (textToCopy && 
-        !responseElement.querySelector('.placeholder-text') && 
-        !responseElement.querySelector('.error-text')) {
-            
-        // Use modern Clipboard API
+    if (textToCopy && !textToCopy.includes("Awaiting your instruction")) {
         navigator.clipboard.writeText(textToCopy).then(() => {
-            // Provide visual feedback by changing the button text temporarily
-            const copyBtn = document.getElementById('btn-copy');
-            const originalText = copyBtn.innerHTML;
-            copyBtn.innerHTML = "✅ Copied!";
+            const originalLabel = bntCopy.innerHTML;
+            bntCopy.innerHTML = "✅ SUCCESS!";
+            bntCopy.style.borderColor = "#10b981";
+            bntCopy.style.color = "#10b981";
             
-            // Revert the button text after 2 seconds
             setTimeout(() => {
-                copyBtn.innerHTML = originalText;
+                bntCopy.innerHTML = originalLabel;
+                bntCopy.style.borderColor = "";
+                bntCopy.style.color = "";
             }, 2000);
         }).catch(err => {
-            console.error('Failed to copy text: ', err);
-            alert('Failed to copy text to clipboard.');
+            console.error('Clipboard Access Denied: ', err);
+            alert('Could not access clipboard.');
         });
     } else {
-        alert("Nothing to copy yet! Please generate a response first.");
+        alert("Nothing to copy! Process a prompt first.");
     }
 }

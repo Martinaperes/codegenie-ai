@@ -1,7 +1,7 @@
 import os
+import requests
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-from openai import OpenAI
 import traceback
 
 # Load environment variables from .env file
@@ -9,11 +9,12 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# DEBUG: Print API key status
-api_key = os.getenv("OPENAI_API_KEY")
-print(f"🔑 API Key loaded: {'✅ YES ({len(api_key)} chars)' if api_key else '❌ MISSING'}")
+# Constants for Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MODEL_NAME = "gemini-flash-latest"  # Updated to match the curl provided
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent"
 
-client = OpenAI(api_key=api_key)
+print(f"🔑 Gemini API Key loaded: {'✅ YES' if GEMINI_API_KEY else '❌ MISSING'}")
 
 @app.route("/")
 def index():
@@ -28,48 +29,67 @@ def ask():
     if not user_prompt:
         return jsonify({"error": "Prompt cannot be empty."}), 400
 
-    # System messages (same as yours)
+    # Task mapping
     if request_type == "generate":
         system_msg = "You are an expert developer. Write clean, well-commented code for the user's request. Only return the code and helpful explanations."
-        full_prompt = f"Write clean, well-commented code for: {user_prompt}"
     elif request_type == "explain":
         system_msg = "You are an expert developer and excellent teacher. Explain the following code in simple, beginner-friendly terms."
-        full_prompt = f"Explain this code in simple terms:\n\n{user_prompt}"
     elif request_type == "debug":
         system_msg = "You are an expert bug finder. Analyze the code, find any errors, explain what went wrong simply, and provide the corrected code."
-        full_prompt = f"Find and fix errors in this code and explain:\n\n{user_prompt}"
     else:
         return jsonify({"error": "Invalid request type."}), 400
 
-    try:
-        print(f"📤 Sending request to OpenAI...")
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": full_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000  # Add this to prevent truncation
-        )
-        
-        ai_reply = response.choices[0].message.content
-        print("✅ OpenAI response received!")
-        return jsonify({"response": ai_reply})
+    # Combine system prompt with user prompt for standard chat completion
+    full_prompt = f"{system_msg}\n\nUser request: {user_prompt}"
 
-    except Exception as e:
-        error_msg = str(e)
-        print(f"❌ OpenAI Error: {error_msg}")
-        print(f"Full traceback: {traceback.format_exc()}")
+    try:
+        print(f"📤 Sending request to Gemini ({MODEL_NAME})...")
         
-        if "Invalid API key" in error_msg:
-            return jsonify({"error": "❌ Invalid API key. Get a new one at https://platform.openai.com/api-keys"}), 401
-        elif "insufficient_quota" in error_msg:
-            return jsonify({"error": "❌ No credits left. Add payment method at https://platform.openai.com/account/billing"}), 402
-        elif "rate_limit" in error_msg:
-            return jsonify({"error": "⏳ Rate limit hit. Wait a moment and try again."}), 429
-        else:
-            return jsonify({"error": f"API Error: {error_msg}"}), 500
+        headers = {
+            "Content-Type": "application/json",
+            "X-goog-api-key": GEMINI_API_KEY
+        }
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": full_prompt}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 2048
+            }
+        }
+
+        response = requests.post(GEMINI_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        # Extract text content from Gemini's structure
+        try:
+            ai_reply = result['candidates'][0]['content']['parts'][0]['text']
+            print("✅ Gemini response received!")
+            return jsonify({"response": ai_reply})
+        except (KeyError, IndexError):
+            print(f"⚠️ Unexpected response structure: {result}")
+            return jsonify({"error": "Failed to parse AI response."}), 500
+
+    except requests.exceptions.HTTPError as http_err:
+        print(f"❌ HTTP Error: {http_err}")
+        try:
+            error_details = response.json()
+            error_msg = error_details.get("error", {}).get("message", str(http_err))
+        except:
+            error_msg = str(http_err)
+        return jsonify({"error": f"Gemini API Error: {error_msg}"}), response.status_code
+    except Exception as e:
+        print(f"❌ Unexpected Error: {str(e)}")
+        print(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Internal Server Error: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
