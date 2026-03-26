@@ -200,7 +200,6 @@ codegenie-ai/
 📄 License
 MIT License - see LICENSE file.
 
-⭐ Star this repo if it helped you!
-Made with ❤️ using AI - Deploy in 5 minutes!
+
 
 <p align="center"> <img src="https://img.shields.io/badge/Deploy-Heroku-brightgreen.svg" alt="Deploy"> <img src="https://img.shields.io/badge/Deploy-Vercel-blue.svg" alt="Deploy"> <img src="https://img.shields.io/badge/Deploy-Railway-orange.svg" alt="Deploy"> </p>
